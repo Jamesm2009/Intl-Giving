@@ -6,7 +6,7 @@ export async function middleware(request) {
 
   const isPublic =
     pathname === "/login" ||
-    pathname.startsWith("/api/login") ||
+    pathname.startsWith("/api/") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon");
 

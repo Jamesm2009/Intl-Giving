@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
+import y2020 from "@/lib/txn-data/y2020";
+import y2021 from "@/lib/txn-data/y2021";
+import y2022 from "@/lib/txn-data/y2022";
+import y2023 from "@/lib/txn-data/y2023";
+import y2024 from "@/lib/txn-data/y2024";
+import y2025 from "@/lib/txn-data/y2025";
+import y2026 from "@/lib/txn-data/y2026";
 
+const BY_YEAR = { 2020: y2020, 2021: y2021, 2022: y2022, 2023: y2023, 2024: y2024, 2025: y2025, 2026: y2026 };
 const ALL_YEARS = [2020, 2021, 2022, 2023, 2024, 2025, 2026];
-
-async function getTransactions(yearsToLoad) {
-  try {
-    const { Redis } = await import("@upstash/redis");
-    const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-    if (!url || !token) return null;
-    const redis = new Redis({ url, token });
-    const results = await Promise.all(
-      yearsToLoad.map((y) => redis.get(`kcm:transactions:${y}`))
-    );
-    return results.flatMap((chunk) => chunk || []);
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -30,25 +22,20 @@ export async function GET(request) {
   const pageSize = Math.min(parseInt(searchParams.get("pageSize") || "50", 10), 200);
 
   const yearsToLoad = year && year !== "all" ? [parseInt(year, 10)] : ALL_YEARS;
-  let rows = await getTransactions(yearsToLoad);
-
-  if (!rows) {
-    return NextResponse.json({
-      rows: [],
-      total: 0,
-      totalAmount: 0,
-      page: 1,
-      pageSize,
-      totalPages: 1,
-      error: "Transaction data not yet loaded into Redis. Visit /api/seed to load it, or run npm run load-data locally.",
-    });
-  }
+  let rows = yearsToLoad.flatMap((y) => BY_YEAR[y] || []);
 
   if (region && region !== "all") rows = rows.filter((r) => r.region === region);
   if (country && country !== "all") rows = rows.filter((r) => r.country === country);
   if (fundCode && fundCode !== "all") rows = rows.filter((r) => r.fundCode === fundCode);
   if (minAmount) { const min = parseFloat(minAmount); rows = rows.filter((r) => r.amount >= min); }
-  if (q) { const needle = q.toLowerCase(); rows = rows.filter((r) => (r.org && r.org.toLowerCase().includes(needle)) || (r.country && r.country.toLowerCase().includes(needle)) || (r.fundCode && r.fundCode.toLowerCase().includes(needle))); }
+  if (q) {
+    const needle = q.toLowerCase();
+    rows = rows.filter((r) =>
+      (r.org && r.org.toLowerCase().includes(needle)) ||
+      (r.country && r.country.toLowerCase().includes(needle)) ||
+      (r.fundCode && r.fundCode.toLowerCase().includes(needle))
+    );
+  }
 
   rows.sort((a, b) => (a.date < b.date ? 1 : -1));
   const total = rows.length;
